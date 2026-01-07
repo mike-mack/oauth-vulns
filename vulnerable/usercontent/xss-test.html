@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>XSS Test Vectors</h1>
+    
+    <!-- Vector 1: Basic script tag -->
+    <script>alert('XSS1')</script>
+    
+    <!-- Vector 2: Event handler -->
+    <img src=x onerror="alert('XSS2')">
+    
+    <!-- Vector 3: JavaScript URL -->
+    <a href="javascript:alert('XSS3')">Click me</a>
+    
+    <!-- Vector 4: Data URL -->
+    <iframe src="data:text/html,<script>alert('XSS4')</script>"></iframe>
+    
+    <!-- Vector 5: SVG embedded script -->
+    <svg onload="alert('XSS5')"></svg>
+</body>
+</html>
